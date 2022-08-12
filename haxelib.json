@@ -1,0 +1,10 @@
+{
+	"name": "gltftools",
+	"license": "MIT",
+	"tags": [],
+	"description": "GLTF/GLB tools",
+	"version": "0.1.0",
+	"releasenote": "",
+	"contributors": [ "greg209" ],
+	"classPath": "src"
+}
