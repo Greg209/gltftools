@@ -1,5 +1,6 @@
 package gltftools;
 
+import openfl.geom.Vector3D;
 import gltftools.data.GLTFData;
 import openfl.Vector;
 import openfl.Vector;
@@ -261,13 +262,17 @@ class GLTFTools {
 
     function processObjectContainer(container:ObjectContainer3D, par:Dynamic ) {
         var name = (container.name==null || container.name == "" || container.name == "null") ? "Container_"+containerCtr : container.name;
+        #if debug_export
         trace("Container: name="+name+" numChildren="+container.numChildren+" transform="+container.transform);
+        #end
         addNode( container, par, name, container.transform );
         containerCtr++;
     }
 
     function processMesh(mesh:Mesh, par:Dynamic ) {
+        #if debug_export
         trace("Mesh: name="+mesh.name+" numChildren="+mesh.numChildren+" transform="+mesh.transform);
+        #end
         getMeshNodes( mesh, par );
   }
 
@@ -292,11 +297,14 @@ class GLTFTools {
 
             for (subMesh in subMeshes) {
                 var name = baseMesh.name+"_"+ctr;
+                #if debug_export
                 trace("Processing subMesh: name="+name+" numVerts="+subMesh.numVertices);
-                
+                #end
+
                 var csg:CompactSubGeometry = cast subMesh.subGeometry;
                 var vertexPositions = csg.stripBuffer(0, 3);    //vertexPositionData;
                 var vertexNormals = csg.stripBuffer(3, 3);      //vertexNormalData;
+                fixNormals(vertexNormals);
                 var indexes = subMesh.indexData.copy();         //Indices
                 var count = subMesh.numVertices;
                 
@@ -342,15 +350,31 @@ class GLTFTools {
         }
     }
 
+    function fixNormals(normals:Vector<Float>) {
+        var nCtr = 0;
+        var norm:Vector3D = new Vector3D();
+        while (nCtr < normals.length) {
+            norm.x = normals[nCtr];
+            norm.y = normals[nCtr+1];
+            norm.z = normals[nCtr+2];
+            norm.normalize();
+            normals[nCtr] = Std.int(norm.x * 1000000) / 1000000;
+            normals[nCtr+1] = Std.int(norm.y * 1000000) / 1000000;
+            normals[nCtr+2] = Std.int(norm.z * 1000000) / 1000000;        
+            nCtr+=3;
+        }
+    }
+
     function addNode(currentItem:Dynamic, parentItem:Dynamic, name:String, transform:Matrix3D, isMesh:Bool = false ) {
         var matData = transform.clone();
         // Scene flip if on scene root
         if (parentItem==null)
             matData.prependScale(-1, 1, 1);
         
+        var m = matData.rawData;
         var node:Node = {
             name: name,
-            matrix: cast matData.rawData
+            matrix: [ m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15] ]
         };
         
         if (nodes==null) nodes = [];
@@ -400,7 +424,10 @@ class GLTFTools {
         bufferLength += bytesLen;
         byteOffset += bytesLen;
         
+        #if debug_export
         trace("BufferView: "+bufferViewIndex+" len="+buffView.byteLength+" off="+buffView.byteOffset+" name="+buffView.name+" stride="+buffView.byteStride+" padlength="+padlength);
+        #end
+        
         return bufferViewIndex++;
     }
 
@@ -444,11 +471,14 @@ class GLTFTools {
         if (accessors==null) accessors=[];
         accessors.push( acc );
 
+        #if debug_export
         trace("Accessor: "+accessorIndex+" name="+acc.name+" bv="+acc.bufferView+" ct="+acc.componentType+" count="+acc.count+" type="+acc.type+" min="+acc.min+" max="+acc.max+" byteOffset="+acc.byteOffset);
+        #end 
+        
         return accessorIndex++;
     }
 
-    function getMinMax(data:Vector<Dynamic>, stride:Int):MinMax {
+    function getMinMax(data:Vector<Float>, stride:Int):MinMax {
         var mm:MinMax = { min:[], max:[] };
         for (element in 0...stride) {
             mm.min.push( Math.POSITIVE_INFINITY );
