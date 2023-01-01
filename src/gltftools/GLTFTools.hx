@@ -45,6 +45,8 @@ class GLTFTools {
 
     public static var textureMapping:Map<BitmapTexture, ImageFile> = new Map<BitmapTexture, ImageFile>();
     
+    static var identity:Array<Float> = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+
     var GENERATOR = "GLTFTools by Geepers Interactive Ltd. V1.0.0 - Greg Caldwell";
     var VERSION = "2.0";
 
@@ -308,9 +310,9 @@ class GLTFTools {
                 var indexes = subMesh.indexData.copy();         //Indices
                 var count = subMesh.numVertices;
                 
-                var positionBufferViewIdx = addBufferView( name+"-positionBufferView", bytesFromFloats(vertexPositions), 12 );
-                var normalBufferViewIdx = addBufferView( name+"-normalBufferView", bytesFromFloats(vertexNormals), 12 );
-                var indicesBufferViewIdx = addBufferView( name+"-indicesBufferView", bytesFromInts(indexes), 2 );
+                var positionBufferViewIdx = addBufferView( name+"-positionBufferView", bytesFromFloats(vertexPositions), 12, BufferTarget.ArrayBuffer );
+                var normalBufferViewIdx = addBufferView( name+"-normalBufferView", bytesFromFloats(vertexNormals), 12, BufferTarget.ArrayBuffer );
+                var indicesBufferViewIdx = addBufferView( name+"-indicesBufferView", bytesFromInts(indexes), 2, BufferTarget.ElementArrayBuffer );
                 var positionAccIdx = addAccessor( name+"-position", positionBufferViewIdx, CTFloat, count, Vec3, getMinMax(vertexPositions, 3), 0 );
                 var normalAccIdx = addAccessor( name+"-normal", normalBufferViewIdx, CTFloat, count, Vec3, getMinMax(vertexNormals, 3), 0 );
                 var indexIdx = addAccessor( name+"-index", indicesBufferViewIdx, CTUnsignedInt, indexes.length, Scalar, null, 0 );
@@ -323,7 +325,7 @@ class GLTFTools {
 
                 if (Std.isOfType(subMesh.material, TextureMaterial)) {
                     var uvs1 = csg.stripBuffer(9, 2);//UVData;
-                    var uvBufferViewIdx = addBufferView( name+"-uvBufferView", bytesFromFloats(uvs1), 8 );
+                    var uvBufferViewIdx = addBufferView( name+"-uvBufferView", bytesFromFloats(uvs1), 8, BufferTarget.ArrayBuffer );
                     var uvs1AccIdx = addAccessor( name+"-uvs1", uvBufferViewIdx, CTFloat, count, Vec2, null, 0 );
                     attr.TEXCOORD_0 = uvs1AccIdx++;
                 }
@@ -358,9 +360,9 @@ class GLTFTools {
             norm.y = normals[nCtr+1];
             norm.z = normals[nCtr+2];
             norm.normalize();
-            normals[nCtr] = Std.int(norm.x * 1000000) / 1000000;
-            normals[nCtr+1] = Std.int(norm.y * 1000000) / 1000000;
-            normals[nCtr+2] = Std.int(norm.z * 1000000) / 1000000;        
+            normals[nCtr] = norm.x;
+            normals[nCtr+1] = norm.y;
+            normals[nCtr+2] = norm.z;
             nCtr+=3;
         }
     }
@@ -372,11 +374,18 @@ class GLTFTools {
             matData.prependScale(-1, 1, 1);
         
         var m = matData.rawData;
-        var node:Node = {
-            name: name,
-            matrix: [ m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15] ]
+        var node:Node = { name: name };
+        var isIdentity = true;
+
+        for (i in 0...16) {
+            if (identity[i]!=m[i]) {
+                isIdentity = false;
+                break;
+            }
         };
-        
+
+        if (!isIdentity) node.matrix = [ m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15] ];
+
         if (nodes==null) nodes = [];
         if (isMesh) {
             node.mesh = meshIndex;
@@ -398,7 +407,7 @@ class GLTFTools {
         nodeIndex++;
     }
 
-    function addBufferView(name:String, bytes:Bytes, stride:Int/*, target */):Int {
+    function addBufferView(name:String, bytes:Bytes, stride:Int, target:BufferTarget = null):Int {
         
         var bytesLen = bytes.length;
         bufferBytes.addBytes( bytes, 0, bytesLen );
@@ -417,6 +426,9 @@ class GLTFTools {
             byteOffset: byteOffset,
             name: name
         }
+
+        if (target!=null)
+            buffView.target = target;
 
         if (bufferViews==null) bufferViews = [];
         bufferViews.push( buffView );
