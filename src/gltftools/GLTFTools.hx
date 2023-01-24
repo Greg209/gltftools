@@ -516,11 +516,17 @@ class GLTFTools {
 
         var normalInfo:MaterialNormalTextureInfo = null;
 
+        var mat:Material = {
+            name: m.name,
+            pbrMetallicRoughness: matMetalRough
+        };
+
         if (Std.isOfType(m, TextureMaterial)) {
             texturesUsed = true;
             
             var texMat:TextureMaterial = cast m;
-            var name = texMat.texture.name == null || texMat.texture.name=="" || texMat.texture.name=="null" ? baseName+"_image_"+imageCtr : texMat.name;
+            var name = (texMat.texture.name == null || texMat.texture.name=="" || texMat.texture.name=="null") ? baseName+"_image_"+imageCtr : texMat.name;
+            if (mat.name == "null") mat.name = "TexMat_"+imageCtr;
             var textureIndex = addTexture(name, cast texMat.texture);
             var textureInfo:TextureInfo = {
                 index: textureIndex,
@@ -533,7 +539,14 @@ class GLTFTools {
                 0.30603279993281185,
                 texMat.alpha
             ];
- 
+
+            if (texMat.alpha != 1. || texMat.requiresBlending) {
+                mat.alphaMode = MaterialAlphaMode.Blend;
+            } else if (texMat.alphaThreshold > 0) {
+                mat.alphaCutoff = texMat.alphaThreshold;
+                mat.alphaMode = MaterialAlphaMode.Mask;
+            }
+
             matMetalRough.baseColorTexture = textureInfo;
 
             imageCtr++;
@@ -551,20 +564,28 @@ class GLTFTools {
         } else if (Std.isOfType(m, ColorMaterial)) {
             var colMat:ColorMaterial = cast m;
 
+            if (mat.name == "null") mat.name = "ColMat_0x"+StringTools.hex(colMat.color, 6);
+            
             matMetalRough.baseColorFactor = [
                 ((colMat.color >> 16) & 0xff) / 255.0,
                 ((colMat.color >> 8) & 0xff) / 255.0,
                 (colMat.color & 0xff) / 255.0,
                 colMat.alpha
             ];
+
+            if (colMat.alpha != 1. || colMat.requiresBlending) {
+                mat.alphaMode = MaterialAlphaMode.Blend;
+            } else if (colMat.alphaThreshold > 0) {
+                mat.alphaCutoff = colMat.alphaThreshold;
+                mat.alphaMode = MaterialAlphaMode.Mask;
+            }
         }
 
-        var mat:Material = {
-            name: m.name,
-            pbrMetallicRoughness: matMetalRough
-        };
-
         if (normalInfo!=null) mat.normalTexture = normalInfo;
+
+        if (m.bothSides) {
+            mat.doubleSided = true;
+        }
 
         if (materials==null) materials = [];
         materials.push( mat );
