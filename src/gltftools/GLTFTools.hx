@@ -1,5 +1,6 @@
 package gltftools;
 
+import away3d.materials.SinglePassMaterialBase;
 import openfl.geom.Vector3D;
 import gltftools.data.GLTFData;
 import openfl.Vector;
@@ -323,7 +324,8 @@ class GLTFTools {
                     NORMAL: normalAccIdx
                 };
 
-                if (Std.isOfType(subMesh.material, TextureMaterial)) {
+                var spMaterial:SinglePassMaterialBase = cast subMesh.material;
+                if (Std.isOfType(subMesh.material, TextureMaterial) || spMaterial.normalMap != null) {
                     var uvs1 = csg.stripBuffer(9, 2);//UVData;
                     var uvBufferViewIdx = addBufferView( name+"-uvBufferView", bytesFromFloats(uvs1), 8, BufferTarget.ArrayBuffer );
                     var uvs1AccIdx = addAccessor( name+"-uvs1", uvBufferViewIdx, CTFloat, count, Vec2, null, 0 );
@@ -579,6 +581,18 @@ class GLTFTools {
                 mat.alphaCutoff = colMat.alphaThreshold;
                 mat.alphaMode = MaterialAlphaMode.Mask;
             }
+
+            if (colMat.normalMap!=null) {
+                var name = colMat.normalMap.name == null || colMat.normalMap.name=="" || colMat.normalMap.name=="null" ? baseName+"_normal_"+imageCtr : colMat.name;
+                var normalIndex = addTexture(name, cast colMat.normalMap);
+                normalInfo = {
+                    index: normalIndex,
+                    texCoord: 0
+                }
+
+                imageCtr++;
+            }
+
         }
 
         if (normalInfo!=null) mat.normalTexture = normalInfo;
