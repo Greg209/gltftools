@@ -1,6 +1,7 @@
 package gltftools;
 
 import away3d.materials.SinglePassMaterialBase;
+import away3d.core.math.Matrix3DUtils;
 import openfl.geom.Vector3D;
 import gltftools.data.GLTFData;
 import openfl.Vector;
@@ -51,6 +52,7 @@ class GLTFTools {
     var GENERATOR = "GLTFTools by Geepers Interactive Ltd. V1.0.0 - Greg Caldwell";
     var VERSION = "2.0";
 
+    var flipX:Bool = true;
     var embedData:BinaryData = null;
     var accessorIndex:Int = 0;
     var bufferIndex:Int = 0;
@@ -102,12 +104,82 @@ class GLTFTools {
     function new() {}
 
     #if away3d
-    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true):String {
+    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true):String {
+        GLTFTools.instance.flipX = flipX;
         return GLTFTools.instance.gltfFromAway3D(container, embedData ? BinaryData.EMBEDDED : BinaryData.EXTERNAL);
     }
 
-    public static function exportGLBFromAway3D(container:ObjectContainer3D):Bytes {
+    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true):Bytes {
+        GLTFTools.instance.flipX = flipX;
         return GLTFTools.instance.glbFromAway3D(container);
+    }
+
+	public static function bakeVertices( meshes:Array<Mesh>, container:ObjectContainer3D ) {
+		for (cI in 0...container.numChildren) {
+			var cObj = container.getChildAt(cI);
+			if (Std.isOfType(cObj, Mesh)) {
+				/*
+				* - stripBuffer(0, 3), return only the vertices
+				* - stripBuffer(3, 3): return only the normals
+				* - stripBuffer(6, 3): return only the tangents
+				* - stripBuffer(9, 2): return only the uv's
+				*/
+				var m:Mesh = cast cObj;
+                
+                // var newMesh = m.clone();
+                // newMesh.geometry = m.geometry.clone();
+                // newMesh.bakeTransformations();
+
+				var newGeom = new Geometry();
+				var newMesh:Mesh = new Mesh(newGeom, m.material);
+                var smIdx = 0;
+				for (sm in m.subMeshes) {
+					var sg = sm.subGeometry;
+                    var csg:CompactSubGeometry = cast sg;
+					var oUV = csg.stripBuffer(9, 2);
+                    var nV = transformVector(csg.stripBuffer(0, 3), sm.sceneTransform); // Vertices
+                    var nN = transformVector(csg.stripBuffer(3, 3), sm.sceneTransform); // Normals
+                    var nT = transformVector(csg.stripBuffer(6, 3), sm.sceneTransform); // Tangents
+					
+                    var g = newMesh.geometry;
+					var nsg = new CompactSubGeometry();
+					nsg.fromVectors(nV, oUV, nN, nT);
+					var idx = sm.indexData.copy();
+					
+                    // Invert faces
+					var i = 0;
+					var t:Int;
+					while (i < idx.length) {
+						t = idx[i];
+						idx[i] = idx[i+2];
+						idx[i+2] = t;
+						i+=3;
+					}
+					nsg.updateIndexData(idx);
+					g.addSubGeometry( nsg );
+                    newMesh.subMeshes[smIdx++] = new SubMesh(nsg, newMesh, sm.material);
+                    nsg.updateData(nsg.vertexData);
+				}
+                newMesh.material = m.material;
+				meshes.push( newMesh );
+			} else if (Std.isOfType(cObj, ObjectContainer3D)) {
+				bakeVertices( meshes, cast cObj);
+			}
+		}
+	}
+
+    static function transformVector(orig:Vector<Float>, transform:Matrix3D) {
+        var nVec = new Vector<Float>(orig.length);
+        var i = 0;
+        while (i < orig.length) {
+            var tmp = new Vector3D(orig[i], orig[i+1], orig[i+2]);
+            var tx = Matrix3DUtils.transformVector(transform, tmp);
+            nVec[i] = tx.x;
+            nVec[i+1] = tx.y;
+            nVec[i+2] = tx.z;
+            i+=3;
+        }
+        return nVec;
     }
 
     function gltfFromAway3D(container:ObjectContainer3D, embedData:BinaryData):String {
@@ -372,7 +444,7 @@ class GLTFTools {
     function addNode(currentItem:Dynamic, parentItem:Dynamic, name:String, transform:Matrix3D, isMesh:Bool = false ) {
         var matData = transform.clone();
         // Scene flip if on scene root
-        if (parentItem==null)
+        if (flipX && parentItem==null)
             matData.prependScale(-1, 1, 1);
         
         var m = matData.rawData;
