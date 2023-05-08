@@ -136,10 +136,16 @@ class GLTFTools {
 				for (sm in m.subMeshes) {
 					var sg = sm.subGeometry;
                     var csg:CompactSubGeometry = cast sg;
+                    var oV = csg.stripBuffer(0, 3);
+                    var oN = csg.stripBuffer(3, 3);
+                    var oT = csg.stripBuffer(6, 3);    
 					var oUV = csg.stripBuffer(9, 2);
-                    var nV = transformVector(csg.stripBuffer(0, 3), sm.sceneTransform); // Vertices
-                    var nN = transformVector(csg.stripBuffer(3, 3), sm.sceneTransform); // Normals
-                    var nT = transformVector(csg.stripBuffer(6, 3), sm.sceneTransform); // Tangents
+                    var nV = transformVector(oV, sm.sceneTransform); // Vertices
+                    var invTanspose = sm.sceneTransform.clone();
+                    invTanspose.invert();
+                    invTanspose.transpose();    
+                    var nN = transformVector(oN, invTanspose, true); // Normals
+                    var nT = transformVector(oT, invTanspose, true); // Tangents
 					
                     var g = newMesh.geometry;
 					var nsg = new CompactSubGeometry();
@@ -168,12 +174,18 @@ class GLTFTools {
 		}
 	}
 
-    static function transformVector(orig:Vector<Float>, transform:Matrix3D) {
+    static function transformVector(orig:Vector<Float>, transform:Matrix3D, normalize:Bool = false) {
         var nVec = new Vector<Float>(orig.length);
         var i = 0;
         while (i < orig.length) {
             var tmp = new Vector3D(orig[i], orig[i+1], orig[i+2]);
-            var tx = Matrix3DUtils.transformVector(transform, tmp);
+            var tx:Vector3D;
+            if (normalize) {
+                tx = transform.deltaTransformVector(tmp);
+                tx.normalize();
+            } else {
+                tx = Matrix3DUtils.transformVector(transform, tmp);
+            }
             nVec[i] = tx.x;
             nVec[i+1] = tx.y;
             nVec[i+2] = tx.z;
