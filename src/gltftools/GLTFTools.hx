@@ -114,8 +114,14 @@ class GLTFTools {
         return GLTFTools.instance.glbFromAway3D(container);
     }
 
-	public static function bakeVertices( meshes:Array<Mesh>, container:ObjectContainer3D ) {
-		for (cI in 0...container.numChildren) {
+	public static function bakeVertices( container:ObjectContainer3D ):ObjectContainer3D {
+		var meshContainer =  new ObjectContainer3D();
+        bake(meshContainer, container);
+        return meshContainer;
+    }
+
+    static function bake( meshContainer:ObjectContainer3D, container:ObjectContainer3D ) {
+        for (cI in 0...container.numChildren) {
 			var cObj = container.getChildAt(cI);
 			if (Std.isOfType(cObj, Mesh)) {
 				/*
@@ -126,10 +132,6 @@ class GLTFTools {
 				*/
 				var m:Mesh = cast cObj;
                 
-                // var newMesh = m.clone();
-                // newMesh.geometry = m.geometry.clone();
-                // newMesh.bakeTransformations();
-
 				var newGeom = new Geometry();
 				var newMesh:Mesh = new Mesh(newGeom, m.material);
                 var smIdx = 0;
@@ -167,9 +169,9 @@ class GLTFTools {
                     nsg.updateData(nsg.vertexData);
 				}
                 newMesh.material = m.material;
-				meshes.push( newMesh );
+				meshContainer.addChild( newMesh );
 			} else if (Std.isOfType(cObj, ObjectContainer3D)) {
-				bakeVertices( meshes, cast cObj);
+				bake( meshContainer, cast cObj);
 			}
 		}
 	}
