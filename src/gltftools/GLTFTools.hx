@@ -47,6 +47,16 @@ class GLTFTools {
 
     public static var textureMapping:Map<BitmapTexture, ImageFile> = new Map<BitmapTexture, ImageFile>();
     
+    // For Non-embedded GLTF exports, the following are the binary data and imaged being 
+    // referenced, which need to be saved
+    //
+    // GLTF_BINARY_FILENAME - is the filename referenced in the GLTF for the binary data
+    // GLTF_BINARY - The actual binary bytes - should be saved with the above filename
+    // GLTF_IMAGES - A map where each key is the filename and the value is the image data to be saved.
+    public static var GLTF_BINARY_FILENAME:String;
+    public static var GLTF_BINARY:Bytes;
+    public static var GLTF_IMAGES:Map<String, Bytes>;
+    
     static var identity:Array<Float> = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
     var GENERATOR = "GLTFTools by Geepers Interactive Ltd. V1.0.0 - Greg Caldwell";
@@ -233,6 +243,10 @@ class GLTFTools {
     }
 
     function buildGLTFExport(container:ObjectContainer3D, embedData:BinaryData) {
+        
+        GLTF_BINARY = null;
+        GLTF_IMAGES = new Map<String, Bytes>();
+
         accessorIndex = 0;
         bufferIndex = 0;
         bufferViewIndex = 0;
@@ -540,8 +554,11 @@ class GLTFTools {
         mainBuffer = {
             byteLength: len
         }
-        if (embedData!=BinaryData.GLBBUFFER)
+        if (embedData!=BinaryData.GLBBUFFER) {
+            GLTF_BINARY = bytes.getBytes();
+            GLTF_BINARY_FILENAME = uri;
             mainBuffer.uri = uri;
+        }
     }
 
     function getComponentByteCount(compType:ComponentType):Int {
@@ -743,6 +760,7 @@ class GLTFTools {
                 var encoded = Base64.encode( bytes.getBytes() );
                 image.uri = "data:"+mimeType+";base64,"+encoded;
             case BinaryData.EXTERNAL:
+                GLTF_IMAGES[filename] = bytes.getBytes();
                 image.uri = filename;
             case BinaryData.GLBBUFFER:
                 var imageBVId = addBufferView(filename, bytes.getBytes(), 0);
