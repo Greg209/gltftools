@@ -63,6 +63,25 @@ class GLTFTools {
     var VERSION = "2.0";
 
     var flipX:Bool = true;
+    /**
+     *  
+
+    @:optional var pbrMetallicRoughness:MaterialMetalicRoughness;
+	@:optional var normalTexture:MaterialNormalTextureInfo;
+	@:optional var occlusionTexture:MaterialOcclusionTextureInfo;
+	@:optional var emissiveTexture:TextureInfo;
+	@:optional var emissiveFactor:Array<Float>;
+	@:optional var alphaMode:MaterialAlphaMode;
+	@:optional var alphaCutoff:Float;
+	@:optional var doubleSided:Bool;
+
+     * Tweak GLTF material settings by passing a map of material names coupled with an object containing PBR adjustments. e.g.:
+     * var overrides = new Map<String,Material>();
+     * overrides.set("myMaterialName", { pbrMetallicRoughness:0.5 });
+     * var glb:Bytes = GLTFTools.exportGLBFromAway3D( theContainer, false, overrides )
+     */
+
+    var materialOverrides:Map<String,Material> = new Map<String,Material>();
     var embedData:BinaryData = null;
     var accessorIndex:Int = 0;
     var bufferIndex:Int = 0;
@@ -114,13 +133,15 @@ class GLTFTools {
     function new() {}
 
     #if away3d
-    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true):String {
+    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true, ?materialOverrides:Map<String,Material>):String {
         GLTFTools.instance.flipX = flipX;
+        GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.gltfFromAway3D(container, embedData ? BinaryData.EMBEDDED : BinaryData.EXTERNAL);
     }
 
-    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true):Bytes {
+    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true, ?materialOverrides:Map<String,Material>):Bytes {
         GLTFTools.instance.flipX = flipX;
+        GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.glbFromAway3D(container);
     }
 
@@ -614,12 +635,12 @@ class GLTFTools {
 
     function addMaterial(subMesh:SubMesh, baseName:String):Int {
         var m = subMesh.material;
+
         var matMetalRough:MaterialMetalicRoughness = {
             metallicFactor: 0,
-            roughnessFactor: 0.16801775892977194,
+            roughnessFactor: 0.5
+            // roughnessFactor: 0.16801775892977194
         }
-
-        var normalInfo:MaterialNormalTextureInfo = null;
 
         var mat:Material = {
             name: m.name,
@@ -627,11 +648,36 @@ class GLTFTools {
         };
 
         if (Std.isOfType(m, TextureMaterial)) {
+
+            var texMat:TextureMaterial = cast m;
+            var bitmapTex:BitmapTexture = cast texMat.texture;
+            var image:ImageFile = textureMapping.get(bitmapTex);
+            var filename:String = "";
+            if (image != null){
+                filename = image.filename;
+                trace("filename:"+filename);
+
+            }
+            
+            if (materialOverrides.exists(filename)){
+                var materialOverride = materialOverrides.get(m.originalName);
+                // mat = materialOverride; //don't, because it will overwrite matMetalRough which needs to be adjusted below
+                if (materialOverride.pbrMetallicRoughness != null){
+                    matMetalRough = materialOverride.pbrMetallicRoughness;
+                }
+            } 
+        } 
+
+        var normalInfo:MaterialNormalTextureInfo = null;
+
+
+        if (Std.isOfType(m, TextureMaterial)) {
             texturesUsed = true;
             
             var texMat:TextureMaterial = cast m;
             var name = (texMat.texture.name == null || texMat.texture.name=="" || texMat.texture.name=="null") ? baseName+"_image_"+imageCtr : texMat.name;
             if (mat.name == "null") mat.name = "TexMat_"+imageCtr;
+            trace("addMaterial:" + name);
             var textureIndex = addTexture(name, cast texMat.texture);
             var textureInfo:TextureInfo = {
                 index: textureIndex,
