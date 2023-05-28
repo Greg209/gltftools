@@ -1,5 +1,6 @@
 package gltftools;
 
+import away3d.materials.MaterialBase;
 import away3d.materials.SinglePassMaterialBase;
 import away3d.core.math.Matrix3DUtils;
 import openfl.geom.Vector3D;
@@ -43,6 +44,11 @@ enum BinaryData {
     GLBBUFFER;
 }
 
+typedef MetalicRoughnessOverride = {
+	@:optional var metallicFactor:Float;
+	@:optional var roughnessFactor:Float;
+}
+
 class GLTFTools {
 
     public static var textureMapping:Map<BitmapTexture, ImageFile> = new Map<BitmapTexture, ImageFile>();
@@ -56,6 +62,8 @@ class GLTFTools {
     public static var GLTF_BINARY_FILENAME:String;
     public static var GLTF_BINARY:Bytes;
     public static var GLTF_IMAGES:Map<String, Bytes>;
+
+    public static var glossRange:Float = 255; // Used to scale Away3D material gloss to the roughness range 0-1
     
     static var identity:Array<Float> = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
@@ -63,25 +71,15 @@ class GLTFTools {
     var VERSION = "2.0";
 
     var flipX:Bool = true;
+    var useGlossyAsRoughness:Bool = false;
     /**
      *  
-
-    @:optional var pbrMetallicRoughness:MaterialMetalicRoughness;
-	@:optional var normalTexture:MaterialNormalTextureInfo;
-	@:optional var occlusionTexture:MaterialOcclusionTextureInfo;
-	@:optional var emissiveTexture:TextureInfo;
-	@:optional var emissiveFactor:Array<Float>;
-	@:optional var alphaMode:MaterialAlphaMode;
-	@:optional var alphaCutoff:Float;
-	@:optional var doubleSided:Bool;
-
      * Tweak GLTF material settings by passing a map of material names coupled with an object containing PBR adjustments. e.g.:
      * var overrides = new Map<String,Material>();
      * overrides.set("myMaterialName", { pbrMetallicRoughness:0.5 });
      * var glb:Bytes = GLTFTools.exportGLBFromAway3D( theContainer, false, overrides )
      */
-
-    var materialOverrides:Map<String,Material> = new Map<String,Material>();
+    var materialOverrides:Map<String,MetalicRoughnessOverride>;
     var embedData:BinaryData = null;
     var accessorIndex:Int = 0;
     var bufferIndex:Int = 0;
@@ -133,14 +131,16 @@ class GLTFTools {
     function new() {}
 
     #if away3d
-    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true, ?materialOverrides:Map<String,Material>):String {
+    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true, useGlossyAsRoughness:Bool = false, ?materialOverrides:Map<String,MetalicRoughnessOverride>):String {
         GLTFTools.instance.flipX = flipX;
+        GLTFTools.instance.useGlossyAsRoughness = useGlossyAsRoughness;
         GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.gltfFromAway3D(container, embedData ? BinaryData.EMBEDDED : BinaryData.EXTERNAL);
     }
 
-    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true, ?materialOverrides:Map<String,Material>):Bytes {
+    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true, useGlossyAsRoughness:Bool = false, ?materialOverrides:Map<String,MetalicRoughnessOverride>):Bytes {
         GLTFTools.instance.flipX = flipX;
+        GLTFTools.instance.useGlossyAsRoughness = useGlossyAsRoughness;
         GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.glbFromAway3D(container);
     }
@@ -197,6 +197,7 @@ class GLTFTools {
 					nsg.updateIndexData(idx);
 					g.addSubGeometry( nsg );
                     newMesh.subMeshes[smIdx++] = new SubMesh(nsg, newMesh, sm.material);
+                    newMesh.name = m.name;
                     nsg.updateData(nsg.vertexData);
 				}
                 newMesh.material = m.material;
@@ -639,11 +640,16 @@ class GLTFTools {
         var matMetalRough:MaterialMetalicRoughness = {
             metallicFactor: 0,
             roughnessFactor: 0.5
-            // roughnessFactor: 0.16801775892977194
         }
 
+        if (useGlossyAsRoughness && Std.isOfType(m, SinglePassMaterialBase)) {
+            var spm:SinglePassMaterialBase = cast m;
+            matMetalRough.roughnessFactor = 1 - (spm.gloss / glossRange);
+        }
+
+        var matIdx = materialIndex++;
         var mat:Material = {
-            name: m.name,
+            name: m.name + "_" + matIdx,
             pbrMetallicRoughness: matMetalRough
         };
 
@@ -655,21 +661,18 @@ class GLTFTools {
             var filename:String = "";
             if (image != null){
                 filename = image.filename;
-                trace("filename:"+filename);
-
             }
             
-            if (materialOverrides.exists(filename)){
-                var materialOverride = materialOverrides.get(m.originalName);
-                // mat = materialOverride; //don't, because it will overwrite matMetalRough which needs to be adjusted below
-                if (materialOverride.pbrMetallicRoughness != null){
-                    matMetalRough = materialOverride.pbrMetallicRoughness;
+            if (materialOverrides!=null && materialOverrides.exists(mat.name)){
+                var materialOverride = materialOverrides.get(mat.name);
+                if (materialOverride != null) {
+                    overrideField( matMetalRough, materialOverride, 'metallicFactor');
+                    overrideField( matMetalRough, materialOverride, 'roughnessFactor');
                 }
             } 
         } 
 
         var normalInfo:MaterialNormalTextureInfo = null;
-
 
         if (Std.isOfType(m, TextureMaterial)) {
             texturesUsed = true;
@@ -677,7 +680,6 @@ class GLTFTools {
             var texMat:TextureMaterial = cast m;
             var name = (texMat.texture.name == null || texMat.texture.name=="" || texMat.texture.name=="null") ? baseName+"_image_"+imageCtr : texMat.name;
             if (mat.name == "null") mat.name = "TexMat_"+imageCtr;
-            trace("addMaterial:" + name);
             var textureIndex = addTexture(name, cast texMat.texture);
             var textureInfo:TextureInfo = {
                 index: textureIndex,
@@ -753,7 +755,13 @@ class GLTFTools {
         if (materials==null) materials = [];
         materials.push( mat );
 
-        return materialIndex++;
+        return matIdx;
+    }
+
+    function overrideField(obj:Dynamic, overrideObj:Dynamic, field:String) {
+        if (Reflect.hasField(overrideObj, field)) {
+            Reflect.setField(obj, field, Reflect.field(overrideObj, field));
+        }
     }
 
     function addTexture(name:String, bitmapTex:BitmapTexture):Int {
