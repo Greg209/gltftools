@@ -647,9 +647,8 @@ class GLTFTools {
             matMetalRough.roughnessFactor = 1 - (spm.gloss / glossRange);
         }
 
-        var matIdx = materialIndex++;
         var mat:Material = {
-            name: m.name + "_" + matIdx,
+            name: m.name,
             pbrMetallicRoughness: matMetalRough
         };
 
@@ -755,7 +754,7 @@ class GLTFTools {
         if (materials==null) materials = [];
         materials.push( mat );
 
-        return matIdx;
+        return materialIndex++;
     }
 
     function overrideField(obj:Dynamic, overrideObj:Dynamic, field:String) {
