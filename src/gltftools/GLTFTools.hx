@@ -47,6 +47,7 @@ enum BinaryData {
 typedef MetalicRoughnessOverride = {
 	@:optional var metallicFactor:Float;
 	@:optional var roughnessFactor:Float;
+	@:optional var brightness:Float;
 }
 
 class GLTFTools {
@@ -201,7 +202,6 @@ class GLTFTools {
 					g.addSubGeometry( nsg );
                     newMesh.subMeshes[smIdx++] = new SubMesh(nsg, newMesh, sm.material);
                     newMesh.name = m.name;
-                    trace("NAME:BakedMesh: "+newMesh.name);
                     nsg.updateData(nsg.vertexData);
 				}
                 newMesh.material = m.material;
@@ -641,6 +641,7 @@ class GLTFTools {
     function addMaterial(subMesh:SubMesh, baseName:String):Int {
         var m = subMesh.material;
 
+        var brightnessOverride:Null<Float> = null;
         var matMetalRough:MaterialMetalicRoughness = {
             metallicFactor: 0,
             roughnessFactor: 0.5
@@ -671,6 +672,7 @@ class GLTFTools {
                 if (materialOverride != null) {
                     overrideField( matMetalRough, materialOverride, 'metallicFactor');
                     overrideField( matMetalRough, materialOverride, 'roughnessFactor');
+                    brightnessOverride = getOverride(materialOverride, 'brightness');
                 }
             } 
         } 
@@ -704,7 +706,8 @@ class GLTFTools {
             }
 
             matMetalRough.baseColorTexture = textureInfo;
-            mat.emissiveFactor = [ brightness, brightness, brightness ];
+            var b = brightnessOverride!=null ? brightnessOverride : brightness;
+            mat.emissiveFactor = [ b, b, b ];
             mat.emissiveTexture = textureInfo;
 
             imageCtr++;
@@ -767,6 +770,13 @@ class GLTFTools {
         if (Reflect.hasField(overrideObj, field)) {
             Reflect.setField(obj, field, Reflect.field(overrideObj, field));
         }
+    }
+    
+    function getOverride(overrideObj:Dynamic, field:String):Dynamic {
+        if (Reflect.hasField(overrideObj, field)) {
+            return Reflect.field(overrideObj, field);
+        }
+        return null;
     }
 
     function addTexture(name:String, bitmapTex:BitmapTexture):Int {
