@@ -72,6 +72,7 @@ class GLTFTools {
 
     var flipX:Bool = true;
     var useGlossyAsRoughness:Bool = false;
+    var brightness:Float = 0.5;
     /**
      *  
      * Tweak GLTF material settings by passing a map of material names coupled with an object containing PBR adjustments. e.g.:
@@ -131,16 +132,18 @@ class GLTFTools {
     function new() {}
 
     #if away3d
-    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true, useGlossyAsRoughness:Bool = false, ?materialOverrides:Map<String,MetalicRoughnessOverride>):String {
+    public static function exportGLTFFromAway3D(container:ObjectContainer3D, embedData:Bool = true, flipX:Bool = true, useGlossyAsRoughness:Bool = false, brightness:Float = 0.5, ?materialOverrides:Map<String,MetalicRoughnessOverride>):String {
         GLTFTools.instance.flipX = flipX;
         GLTFTools.instance.useGlossyAsRoughness = useGlossyAsRoughness;
+        GLTFTools.instance.brightness = brightness;
         GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.gltfFromAway3D(container, embedData ? BinaryData.EMBEDDED : BinaryData.EXTERNAL);
     }
 
-    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true, useGlossyAsRoughness:Bool = false, ?materialOverrides:Map<String,MetalicRoughnessOverride>):Bytes {
+    public static function exportGLBFromAway3D(container:ObjectContainer3D, flipX:Bool = true, useGlossyAsRoughness:Bool = false, brightness:Float = 0.5, ?materialOverrides:Map<String,MetalicRoughnessOverride>):Bytes {
         GLTFTools.instance.flipX = flipX;
         GLTFTools.instance.useGlossyAsRoughness = useGlossyAsRoughness;
+        GLTFTools.instance.brightness = brightness;
         GLTFTools.instance.materialOverrides = materialOverrides;
         return GLTFTools.instance.glbFromAway3D(container);
     }
@@ -198,6 +201,7 @@ class GLTFTools {
 					g.addSubGeometry( nsg );
                     newMesh.subMeshes[smIdx++] = new SubMesh(nsg, newMesh, sm.material);
                     newMesh.name = m.name;
+                    trace("NAME:BakedMesh: "+newMesh.name);
                     nsg.updateData(nsg.vertexData);
 				}
                 newMesh.material = m.material;
@@ -700,6 +704,8 @@ class GLTFTools {
             }
 
             matMetalRough.baseColorTexture = textureInfo;
+            mat.emissiveFactor = [ brightness, brightness, brightness ];
+            mat.emissiveTexture = textureInfo;
 
             imageCtr++;
 
